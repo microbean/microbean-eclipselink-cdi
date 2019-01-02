@@ -38,6 +38,19 @@ import org.eclipse.persistence.transaction.JTATransactionController;
  * not JNDI, will be used to acquire a {@link TransactionManager} and
  * {@link MBeanServer}.
  *
+ * <p>Most users will not use this class directly, but will supply its
+ * fully-qualified name as the value of the <a
+ * href="https://www.eclipse.org/eclipselink/documentation/2.7/jpa/extensions/persistenceproperties_ref.htm#target-server">{@code
+ * eclipselink.target-server} Eclipselink JPA extension property</a>
+ * in a <a
+ * href="https://javaee.github.io/tutorial/persistence-intro004.html#persistence-units">{@code
+ * META-INF/persistence.xml} file</a>.</p>
+ *
+ * <p>For example:</p>
+ *
+ * <blockquote><pre>&lt;property name="eclipselink.target-server"
+ *          value="org.microbean.eclipselink.cdi.CDISEPlatform"/&gt;</pre></blockquote>
+ *
  * @author <a href="https://about.me/lairdnelson"
  * target="_parent">Laird Nelson</a>
  *
