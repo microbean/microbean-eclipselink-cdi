@@ -1,6 +1,6 @@
 /* -*- mode: Java; c-basic-offset: 2; indent-tabs-mode: nil; coding: utf-8-unix -*-
  *
- * Copyright © 2018 microBean.
+ * Copyright © 2018–2019 microBean.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,9 +16,13 @@
  */
 
 /**
- * Provides classes and interfaces for working with Eclipselink in CDI.
+ * Provides classes and interfaces for working with <a
+ * href="https://www.eclipse.org/eclipselink/#jpa"
+ * target="_parent">Eclipselink</a> in CDI.
  *
  * @author <a href="https://about.me/lairdnelson"
  * target="_parent">Laird Nelson</a>
+ *
+ * @see org.microbean.eclipselink.cdi.CDISEPlatform
  */
 package org.microbean.eclipselink.cdi;

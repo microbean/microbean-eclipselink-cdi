@@ -1,6 +1,6 @@
 /* -*- mode: Java; c-basic-offset: 2; indent-tabs-mode: nil; coding: utf-8-unix -*-
  *
- * Copyright © 2018 microBean.
+ * Copyright © 2018–2019 microBean.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,21 @@
  */
 package org.microbean.eclipselink.cdi;
 
+import java.lang.annotation.Documented;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
+import java.lang.annotation.Target;
+
 import java.util.concurrent.Executor;
 
 import javax.enterprise.inject.Instance;
 
 import javax.enterprise.inject.spi.CDI;
+
+import javax.enterprise.util.AnnotationLiteral;
+
+import javax.inject.Qualifier;
 
 import javax.management.MBeanServer;
 
@@ -86,11 +96,16 @@ public class CDISEPlatform extends JMXServerPlatformBase {
     super(session);
     final CDI<Object> cdi = CDI.current();
     assert cdi != null;
-    if (!cdi.select(TransactionManager.class).isResolvable()) {
+    if (cdi.select(TransactionManager.class).isUnsatisfied()) {
       this.disableJTA();
     }
-    final Instance<Executor> executorInstance = cdi.select(Executor.class);
-    if (executorInstance == null || !executorInstance.isResolvable()) {
+    Instance<Executor> executorInstance = cdi.select(Executor.class, Eclipselink.Literal.INSTANCE);
+    assert executorInstance != null;
+    if (executorInstance.isUnsatisfied()) {
+      executorInstance = cdi.select(Executor.class);
+    }
+    assert executorInstance != null;
+    if (executorInstance.isUnsatisfied()) {
       this.executor = null;
     } else {
       this.executor = executorInstance.get();
@@ -108,16 +123,21 @@ public class CDISEPlatform extends JMXServerPlatformBase {
     Instance<MBeanServer> instance = this.mBeanServerInstance;
     final boolean returnValue;
     if (instance == null) {
-      instance = CDI.current().select(MBeanServer.class);
+      final CDI<Object> cdi = CDI.current();
+      instance = cdi.select(MBeanServer.class, Eclipselink.Literal.INSTANCE);
       assert instance != null;
-      if (instance.isResolvable()) {
+      if (instance.isUnsatisfied()) {
+        instance = cdi.select(MBeanServer.class);
+      }
+      assert instance != null; 
+      if (instance.isUnsatisfied()) {
+        returnValue = false;
+      } else {
         this.mBeanServerInstance = instance;
         returnValue = true;
-      } else {
-        returnValue = false;
       }
     } else {
-      returnValue = instance.isResolvable();
+      returnValue = !instance.isUnsatisfied();
     }
     return returnValue;
   }
@@ -126,7 +146,8 @@ public class CDISEPlatform extends JMXServerPlatformBase {
   public MBeanServer getMBeanServer() {
     if (this.mBeanServer == null) {
       final Instance<MBeanServer> instance = this.mBeanServerInstance;
-      if (instance != null && instance.isResolvable()) {
+      assert instance != null;
+      if (!instance.isUnsatisfied()) {
         this.mBeanServer = instance.get();
       }
     }
@@ -218,6 +239,53 @@ public class CDISEPlatform extends JMXServerPlatformBase {
       return CDI.current().select(TransactionManager.class).get();
     }
 
+  }
+
+  /**
+   * A {@link Qualifier} used to designate various things as being
+   * related to <a href="https://www.eclipse.org/eclipselink/"
+   * target="_parent">Eclipselink</a> in some way.
+   *
+   * <p>The typical end user will apply this annotation to an
+   * implementation of {@link Executor} if she wants that particular
+   * {@link Executor} used by the {@link
+   * CDISEPlatform#launchContainerRunnable(Runnable)} method.</p>
+   *
+   * <p>The {@link Eclipselink} qualifier may also be used to annotate
+   * an implementation of {@link MBeanServer} for use by the {@link
+   * CDISEPlatform#getMBeanServer()} method.</p>
+   *
+   * @author <a href="https://about.me/lairdnelson"
+   * target="_parent">Laird Nelson</a>
+   *
+   * @see CDISEPlatform#launchContainerRunnable(Runnable)
+   *
+   * @see CDISEPlatform#getMBeanServer()
+   */
+  @Documented
+  @Qualifier
+  @Retention(RetentionPolicy.RUNTIME)
+  @Target({ ElementType.FIELD, ElementType.METHOD, ElementType.TYPE })
+  public @interface Eclipselink {    
+
+    /**
+     * An {@link AnnotationLiteral} that implements {@link
+     * Eclipselink}.
+     *
+     * @author <a href="https://about.me/lairdnelson"
+     * target="_parent">Laird Nelson</a>
+     */
+    public static final class Literal extends AnnotationLiteral<Eclipselink> implements Eclipselink {
+
+      /**
+       * The single instance of the {@link Literal} class.
+       */
+      public static final Eclipselink INSTANCE = new Literal();
+      
+      private static final long serialVersionUID = 1L;
+      
+    }
+    
   }
   
 }
