@@ -22,6 +22,8 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
+import java.util.Objects;
+
 import java.util.concurrent.Executor;
 
 import javax.enterprise.inject.Instance;
@@ -37,6 +39,7 @@ import javax.management.MBeanServer;
 import javax.transaction.TransactionManager;
 
 import org.eclipse.persistence.platform.server.JMXServerPlatformBase;
+import org.eclipse.persistence.platform.server.ServerPlatformBase; // for javadoc only
 
 import org.eclipse.persistence.sessions.DatabaseSession;
 import org.eclipse.persistence.sessions.JNDIConnector;
@@ -70,16 +73,6 @@ public class CDISEPlatform extends JMXServerPlatformBase {
 
 
   /*
-   * Instance fields.
-   */
-  
-
-  private final Executor executor;
-
-  private volatile Instance<MBeanServer> mBeanServerInstance;
-  
-
-  /*
    * Constructors.
    */
 
@@ -94,22 +87,6 @@ public class CDISEPlatform extends JMXServerPlatformBase {
    */
   public CDISEPlatform(final DatabaseSession session) {
     super(session);
-    final CDI<Object> cdi = CDI.current();
-    assert cdi != null;
-    if (cdi.select(TransactionManager.class).isUnsatisfied()) {
-      this.disableJTA();
-    }
-    Instance<Executor> executorInstance = cdi.select(Executor.class, Eclipselink.Literal.INSTANCE);
-    assert executorInstance != null;
-    if (executorInstance.isUnsatisfied()) {
-      executorInstance = cdi.select(Executor.class);
-    }
-    assert executorInstance != null;
-    if (executorInstance.isUnsatisfied()) {
-      this.executor = null;
-    } else {
-      this.executor = executorInstance.get();
-    }
   }
 
 
@@ -117,63 +94,133 @@ public class CDISEPlatform extends JMXServerPlatformBase {
    * Instance methods.
    */
 
-  
+
+  /**
+   * Sets the name of the platform.
+   *
+   * <p>The format of the platform name is subject to change without
+   * notice.</p>
+   *
+   * @see #getServerNameAndVersion()
+   */
   @Override
-  public boolean isRuntimeServicesEnabledDefault() {
-    Instance<MBeanServer> instance = this.mBeanServerInstance;
-    final boolean returnValue;
-    if (instance == null) {
-      final CDI<Object> cdi = CDI.current();
-      instance = cdi.select(MBeanServer.class, Eclipselink.Literal.INSTANCE);
-      assert instance != null;
-      if (instance.isUnsatisfied()) {
-        instance = cdi.select(MBeanServer.class);
-      }
-      assert instance != null; 
-      if (instance.isUnsatisfied()) {
-        returnValue = false;
-      } else {
-        this.mBeanServerInstance = instance;
-        returnValue = true;
-      }
-    } else {
-      returnValue = !instance.isUnsatisfied();
-    }
-    return returnValue;
+  protected void initializeServerNameAndVersion() {
+    this.serverNameAndVersion = this.getClass().getSimpleName();
   }
-  
+
+  /**
+   * Uses CDI to find a relevant {@link MBeanServer}, caches it, and
+   * returns it.
+   *
+   * <p>This method may return {@code null}.</p>
+   *
+   * <p>Overrides of this method may return {@code null}.</p>
+   *
+   * <p>If there is no such {@link MBeanServer} then the {@link
+   * MBeanServer} found and cached by the {@linkplain
+   * JMXServerPlatformBase#getMBeanServer() superclass implementation
+   * of this method} is returned instead.</p>
+   *
+   * @return an {@link MBeanServer}, or {@code null}
+   */
   @Override
   public MBeanServer getMBeanServer() {
     if (this.mBeanServer == null) {
-      final Instance<MBeanServer> instance = this.mBeanServerInstance;
-      assert instance != null;
-      if (!instance.isUnsatisfied()) {
-        this.mBeanServer = instance.get();
+      final CDI<Object> cdi = CDI.current();
+      if (cdi != null) {
+        Instance<MBeanServer> instance = cdi.select(MBeanServer.class, Eclipselink.Literal.INSTANCE);
+        assert instance != null;
+        if (instance.isUnsatisfied()) {
+          instance = cdi.select(MBeanServer.class);
+        }
+        if (!instance.isUnsatisfied()) {
+          final MBeanServer mBeanServer = instance.get();
+          assert mBeanServer != null;
+          this.mBeanServer = mBeanServer;
+        }
       }
     }
     return super.getMBeanServer();
   }
-  
+
+  /**
+   * Uses CDI to find a relevant {@link Executor} whose {@link
+   * Executor#execute(Runnable)} method will be used to submit the
+   * supplied {@link Runnable}.
+   *
+   * <p>If there is no such {@link Executor}, then the {@linkplain
+   * JMXServerPlatformBase#launchContainerRunnable(Runnable)
+   * superclass implementation of this method} is used instead.</p>
+   *
+   * @param runnable the {@link Runnable} to launch; should not be
+   * {@code null}
+   *
+   * @see JMXServerPlatformBase#launchContainerRunnable(Runnable)
+   */
   @Override
   public void launchContainerRunnable(final Runnable runnable) {
-    if (runnable != null && this.executor != null) {
-      this.executor.execute(runnable);
+    if (runnable == null) {
+      super.launchContainerRunnable(null);
     } else {
-      super.launchContainerRunnable(runnable);
+      final CDI<Object> cdi = CDI.current();
+      if (cdi == null) {
+        super.launchContainerRunnable(runnable);
+      } else {
+        Instance<Executor> executorInstance = cdi.select(Executor.class, Eclipselink.Literal.INSTANCE);
+        assert executorInstance != null;
+        if (executorInstance.isUnsatisfied()) {
+          executorInstance = cdi.select(Executor.class);
+        }
+        assert executorInstance != null;
+        final Executor executor;
+        if (executorInstance.isUnsatisfied()) {
+          executor = null;
+        } else {
+          executor = executorInstance.get();
+        }
+        if (executor != null) {
+          executor.execute(runnable);
+        } else {
+          super.launchContainerRunnable(runnable);
+        }
+      }
     }
+  }
+
+  /**
+   * Overrides the {@link
+   * ServerPlatformBase#initializeExternalTransactionController()}
+   * method to {@linkplain #disableJTA() disable JTA} if there is no
+   * {@link TransactionManager} bean present in CDI before invoking
+   * the {@linkplain
+   * ServerPlatformBase#initializeExternalTransactionController()
+   * superclass implementation}.
+   *
+   * @see ServerPlatformBase#initializeExternalTransactionController()
+   */
+  @Override
+  public void initializeExternalTransactionController() {
+    final CDI<Object> cdi = CDI.current();
+    if (cdi == null || cdi.select(TransactionManager.class).isUnsatisfied()) {
+      this.disableJTA();
+    }
+    super.initializeExternalTransactionController();
   }
   
   /**
    * Returns a non-{@code null} {@link Class} that extends {@link
-   * org.eclipse.persistence.transaction.AbstractTransactionController}.
+   * org.eclipse.persistence.transaction.AbstractTransactionController},
+   * namely {@link TransactionController}.
    *
    * @return a non-{@code null} {@link Class} that extends {@link
    * org.eclipse.persistence.transaction.AbstractTransactionController}
    *
    * @see org.eclipse.persistence.transaction.AbstractTransactionController
+   *
+   * @see TransactionController
    */
   @Override
-  public final Class<?> getExternalTransactionControllerClass() {
+  public Class<?> getExternalTransactionControllerClass() {
     if (this.externalTransactionControllerClass == null) {
       this.externalTransactionControllerClass = TransactionController.class;
     }
@@ -198,8 +245,8 @@ public class CDISEPlatform extends JMXServerPlatformBase {
 
   /**
    * A {@link JTATransactionController} whose {@link
-   * #acquireTransactionManager()} uses CDI, not JNDI, to return a
-   * {@link TransactionManager} instance.
+   * #acquireTransactionManager()} method uses CDI, not JNDI, to
+   * return a {@link TransactionManager} instance.
    *
    * @author <a href="https://about.me/lairdnelson"
    * target="_parent">Laird Nelson</a>
@@ -207,8 +254,10 @@ public class CDISEPlatform extends JMXServerPlatformBase {
    * @see #acquireTransactionManager()
    *
    * @see JTATransactionController
+   *
+   * @see CDISEPlatform#getExternalTransactionControllerClass()
    */
-  public static final class TransactionController extends JTATransactionController {
+  public static class TransactionController extends JTATransactionController {
 
 
     /*
@@ -232,11 +281,24 @@ public class CDISEPlatform extends JMXServerPlatformBase {
     /**
      * Returns a non-{@code null} {@link TransactionManager}.
      *
+     * <p>This method never returns {@code null}.</p>
+     *
      * @return a non-{@code null} {@link TransactionManager}
+     *
+     * @exception NullPointerException if in exceedingly rare
+     * specification-violating cases the return value of {@link
+     * CDI#current()} is {@code null}, or if the {@link
+     * Instance#get()} method returns {@code null}
+     *
+     * @exception RuntimeException if the {@link Instance#get()}
+     * method encounters an error providing a {@link
+     * TransactionManager}
+     *
+     * @see JTATransactionController#acquireTransactionManager()
      */
     @Override
-    protected final TransactionManager acquireTransactionManager() {
-      return CDI.current().select(TransactionManager.class).get();
+    protected TransactionManager acquireTransactionManager() {      
+      return Objects.requireNonNull(CDI.current().select(TransactionManager.class).get());
     }
 
   }

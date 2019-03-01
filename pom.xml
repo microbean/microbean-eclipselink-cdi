@@ -4,7 +4,7 @@
 
   <groupId>org.microbean</groupId>
   <artifactId>microbean-eclipselink-cdi</artifactId>
-  <version>0.1.1-SNAPSHOT</version>
+  <version>0.2.0-SNAPSHOT</version>
 
   <parent>
     <groupId>org.microbean</groupId>
@@ -282,6 +282,7 @@
     
     <!-- maven-javadoc-plugin properties; see https://maven.apache.org/plugins/maven-javadoc-plugin/javadoc-mojo.html -->
     <!-- <doclint>-syntax</doclint> -->
+    <doctitle>&lt;a href="${project.url}" target="_parent"&gt;&lt;span style="font-family:Lobster, cursive;"&gt;µb&lt;/span&gt; ${project.artifactId}&lt;/a&gt; ${project.version} &lt;a href="https://travis-ci.com/microbean/${project.artifactId}" target="_parent"&gt;&lt;img src="https://travis-ci.com/microbean/${project.artifactId}.svg?branch=master"&gt;&lt;/a&gt;</doctitle>
     <links>https://microbean.github.io/microbean-development-annotations/apidocs/,http://docs.jboss.org/cdi/api/2.0/,https://javaee.github.io/javaee-spec/javadocs/,https://www.eclipse.org/eclipselink/api/2.7/,https://docs.jboss.org/weld/javadoc/3.0/weld-spi/</links>
     <stylesheetfile>css/stylesheet.css</stylesheetfile>
 
